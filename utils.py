@@ -3,6 +3,7 @@ import torch
 import torch.utils.data
 import sys
 import numpy as np
+from IPython.core.debugger import set_trace
 from skimage.io import imread
 from skimage.feature import hog
 from skimage.transform import resize
@@ -85,7 +86,7 @@ def make_dataset (traindir):
         for subdir, dirs, files in os.walk(i_dir):
             for fname in files:
                 target = int(fname[3:5]) - 1
-                path = os.path.join(traindir, fname)
+                path = os.path.join(subdir, fname)
                 item = (path, target)
                 img.append(item)
     return img

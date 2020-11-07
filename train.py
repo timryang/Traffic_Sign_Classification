@@ -6,6 +6,8 @@ import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
+import torchvision.models as tmodels
+from IPython.core.debugger import set_trace
 
 import argparse
 import os
@@ -23,7 +25,7 @@ parser = argparse.ArgumentParser(description='CURE-TSR Training and Evaluation')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 # Originally workers = 4
-parser.add_argument('-j', '--workers', default=0, type=int, metavar='N',
+parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=80, type=int, metavar='N',
                     help='number of total epochs to run')
@@ -49,39 +51,56 @@ def main():
     global args 
     args = parser.parse_args()
 
-    debug = 1  # 0: normal mode 1: debug mode
+    debug = 0  # 0: normal mode 1: debug mode
 
     # Data loading code
     # args.data: path to the dataset
-    traindir = os.path.join(args.data, 'Real_Train\ChallengeFree')
-    testdir = os.path.join(args.data, 'Real_Test\ChallengeFree')
+    traindir = ['/content/drive/My Drive/ECE6258_Project/CURE-TSR/Real_Train/ChallengeFree','/content/drive/My Drive/ECE6258_Project/CURE-TSR//3_Unreal_Test']
+    testdir = ['/content/drive/My Drive/ECE6258_Project/CURE-TSR/Real_Test/ChallengeFree']
+    # traindir = os.path.join(args.data, 'Real_Train\ChallengeFree')
+    # testdir = os.path.join(args.data, 'Real_Test\ChallengeFree')
 
-    train_dataset = utils.CURETSRDataset(traindir, transforms.Compose([
-        transforms.Resize([28, 28]), transforms.ToTensor(), utils.l2normalize, utils.standardization]))
+    # Transform for AlexNet
+    transform = transforms.Compose([
+        transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), 
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    train_dataset = utils.CURETSRDataset(traindir, transform)
+    test_dataset = utils.CURETSRDataset(testdir, transform)
+
+    # Original model transform
+    # train_dataset = utils.CURETSRDataset(traindir, transforms.Compose([
+    #     transforms.Resize([28, 28]), transforms.ToTensor(), utils.l2normalize, utils.standardization]))
+    # test_dataset = utils.CURETSRDataset(testdir, transforms.Compose([
+    #     transforms.Resize([28, 28]), transforms.ToTensor(), utils.l2normalize, utils.standardization]))
+      
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.workers, pin_memory=True)
-
-    test_dataset = utils.CURETSRDataset(testdir, transforms.Compose([
-        transforms.Resize([28, 28]), transforms.ToTensor(), utils.l2normalize, utils.standardization]))
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False,
                                               num_workers=args.workers, pin_memory=True)
 
-    model = models.Net()
+    # Original model
+    # model = models.Net()
+
+    # Alexnet model
+    model = tmodels.alexnet(pretrained=True)
+    model.classifier[4] = nn.Linear(4096,1024)
+    model.classifier[6] = nn.Linear(1024,14)
+
     if torch.cuda.is_available():
         model = torch.nn.DataParallel(model).cuda()
     print("=> creating model %s " % model.__class__.__name__)
 
-    savedir = 'CNN_iter'
-    checkpointdir = os.path.join('./checkpoints', savedir)
+    savedir = 'AlexNet_Train3'
+    checkpointdir = os.path.join('/content/drive/My Drive/ECE6258_Project/checkpoints/', savedir)
 
     if not debug:
         os.mkdir(checkpointdir)
-        print('log directory: %s' % os.path.join('./logs', savedir))
+        print('log directory: %s' % os.path.join('/content/drive/My Drive/ECE6258_Project/logs/', savedir))
         print('checkpoints directory: %s' % checkpointdir)
 
     # Set the logger
-    if not debug:
-        logger = Logger(os.path.join('./logs/', savedir))
+    # if not debug:
+        # logger = Logger(os.path.join('/content/drive/My Drive/ECE6258_Project/logs/', savedir))
 
     # define loss function (criterion) and optimizer
     if torch.cuda.is_available():
@@ -139,7 +158,7 @@ def main():
 
         if not debug:
             for tag, value in info.items():
-                logger.scalar_summary(tag, value, epoch+1)
+                # logger.scalar_summary(tag, value, epoch+1)
 
                 save_checkpoint({
                     'epoch': epoch + 1,
@@ -234,7 +253,7 @@ def evaluate(test_loader, model, criterion):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.print_freq == 0:
+        if i % 10 == 0:
             print('Test: [{0}/{1}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
@@ -293,7 +312,7 @@ def accuracy(output, target, topk=(1,)):
     res = []
 
     for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+        correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
