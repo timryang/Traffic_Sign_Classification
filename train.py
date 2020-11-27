@@ -17,8 +17,6 @@ import time
 import utils
 import models
 
-from logger import Logger
-
 
 parser = argparse.ArgumentParser(description='CURE-TSR Training and Evaluation')
 
@@ -54,16 +52,21 @@ def main():
     debug = 0  # 0: normal mode 1: debug mode
 
     # Data loading code
-    # args.data: path to the dataset
-    traindir = ['/content/drive/My Drive/ECE6258_Project/CURE-TSR/Real_Train/ChallengeFree','/content/drive/My Drive/ECE6258_Project/CURE-TSR//3_Unreal_Test']
-    testdir = ['/content/drive/My Drive/ECE6258_Project/CURE-TSR/Real_Test/ChallengeFree']
-    # traindir = os.path.join(args.data, 'Real_Train\ChallengeFree')
-    # testdir = os.path.join(args.data, 'Real_Test\ChallengeFree')
+    traindir = ['/content/drive/My Drive/ECE6258_Project/CURE-TSR/Real_Train']
+    #traindir = ['/content/drive/My Drive/ECE6258_Project/CURE-TSR/Real_Train/ChallengeFree','/content/drive/My Drive/ECE6258_Project/CURE-TSR//3_Unreal_Test']
+    # testdir = ['/content/drive/My Drive/ECE6258_Project/CURE-TSR/Real_Test/ChallengeFree']
+    testdir = ['/content/drive/My Drive/ECE6258_Project/CURE-TSR/Real_Test/ChallengeFree','/content/drive/My Drive/ECE6258_Project/CURE-TSR/Real_Test/CodecError-3','/content/drive/My Drive/ECE6258_Project/CURE-TSR/Real_Test/GaussianBlur-3','/content/drive/My Drive/ECE6258_Project/CURE-TSR/Real_Test/Rain-3']
+
+    # Transform for AlexNet w/ Restoration
+    transform = transforms.Compose([
+        transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(),
+        utils.image_restoration, transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
     # Transform for AlexNet
-    transform = transforms.Compose([
-        transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), 
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    #transform = transforms.Compose([
+    #    transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), 
+    #    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+
     train_dataset = utils.CURETSRDataset(traindir, transform)
     test_dataset = utils.CURETSRDataset(testdir, transform)
 
@@ -90,17 +93,13 @@ def main():
         model = torch.nn.DataParallel(model).cuda()
     print("=> creating model %s " % model.__class__.__name__)
 
-    savedir = 'AlexNet_Train3'
+    savedir = 'AlexNet2_FINAL_Restore'
     checkpointdir = os.path.join('/content/drive/My Drive/ECE6258_Project/checkpoints/', savedir)
 
-    if not debug:
+    if not debug and not args.resume:
         os.mkdir(checkpointdir)
         print('log directory: %s' % os.path.join('/content/drive/My Drive/ECE6258_Project/logs/', savedir))
         print('checkpoints directory: %s' % checkpointdir)
-
-    # Set the logger
-    # if not debug:
-        # logger = Logger(os.path.join('/content/drive/My Drive/ECE6258_Project/logs/', savedir))
 
     # define loss function (criterion) and optimizer
     if torch.cuda.is_available():
@@ -158,7 +157,6 @@ def main():
 
         if not debug:
             for tag, value in info.items():
-                # logger.scalar_summary(tag, value, epoch+1)
 
                 save_checkpoint({
                     'epoch': epoch + 1,
@@ -252,7 +250,6 @@ def evaluate(test_loader, model, criterion):
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
-
         if i % 10 == 0:
             print('Test: [{0}/{1}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'

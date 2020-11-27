@@ -3,7 +3,11 @@ import torch
 import torch.utils.data
 import sys
 import numpy as np
+import time
 from IPython.core.debugger import set_trace
+from skimage.restoration import denoise_bilateral
+from skimage.filters import unsharp_mask
+from skimage.exposure import equalize_hist
 from skimage.io import imread
 from skimage.feature import hog
 from skimage.transform import resize
@@ -14,7 +18,7 @@ try:
 except ImportError:
     accimage = None
 
-def vectorize_and_label(directories, do_RGB=False, do_hog=True, orientations=8, ppc=8, cpb=4, block_norm='L2'):
+def vectorize_and_label(directories, do_RGB=False, do_hog=True, orientations=8, ppc=8, cpb=4, block_norm='L2', restore=False):
     image_vect = []
     label_vect = []
     challenge_type = []
@@ -31,6 +35,8 @@ def vectorize_and_label(directories, do_RGB=False, do_hog=True, orientations=8, 
                 if np.max(image)>1:
                     image = image.astype(float)/255
                 image = resize(image, (28,28))
+                if restore:
+                    image = image_restoration(image,do_RGB,tensor=False)
                 if image.std() == 0:
                     image = (image-image.mean())
                 else:
@@ -42,6 +48,23 @@ def vectorize_and_label(directories, do_RGB=False, do_hog=True, orientations=8, 
                     image_vect.append(image.ravel())
                     
     return np.array(image_vect), np.array(label_vect), np.array(challenge_type), np.array(challenge_level)
+
+def image_restoration(image, RGB=True, tensor=True):
+    if tensor:
+        image = image.permute(1,2,0)
+    image1 = denoise_bilateral(image,multichannel=RGB)
+    image2 = unsharp_mask(image1,multichannel=RGB)
+    # if RGB:
+    #     image3 = np.zeros(image2.shape)
+    #     for channel in range(image2.shape[2]):
+    #         image3[:, :, channel] = equalize_hist(image2[:, :, channel])
+    # else:
+    #     image3 = equalize_hist(image2)
+    image3 = equalize_hist(image2)
+    if tensor:
+        image3 = torch.tensor(np.transpose(image3,(2,0,1)))
+	image3 = image3.float()
+    return image3
 
 
 def _is_tensor_image(img):
@@ -84,6 +107,8 @@ def make_dataset (traindir):
     img = []
     for i_dir in traindir:
         for subdir, dirs, files in os.walk(i_dir):
+            print('Num files in '+subdir+': '+str(len(files)))
+            time.sleep(0.5)
             for fname in files:
                 target = int(fname[3:5]) - 1
                 path = os.path.join(subdir, fname)
